@@ -206,4 +206,123 @@ app.use("/", logout);
 const PORT = 5050;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+});  if (req.file) {
+    return res.status(200).send({
+      message: "Image saved successfully",
+      filename: req.file.filename,
+    });
+  }
+  return res.status(400).send("Image upload failed.");
+});
+
+app.use(logger);
+
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+const webhookResponses = []; // Array to store webhook responses
+// GitHub Webhook Handler
+app.post("/feed/webhook", (req, res) => {
+  const signature = req.headers["x-hub-signature"];
+  const secret = "Zm3xN7sjkL1hZ0qJw3eD6Yb9Xp2P5lA8";
+  const payload = req.body;
+
+  if (verifySignature(payload, signature, secret)) {
+    try {
+      const data = req.body;
+      const response = buildResponseObject(data);
+
+      // Add to the beginning of the webhook responses array
+      webhookResponses.unshift(response);
+      console.log(webhookResponses);
+
+      res.status(200).json({ message: "Webhook received and verified" });
+    } catch (error) {
+      console.error(error);
+      res
+        .status(500)
+        .json({ message: "Internal server error", error: error.message });
+    }
+  } else {
+    res.status(400).json({ message: "Signature verification failed" });
+  }
+});
+
+// Function to verify signature
+function verifySignature(payload, signatureHeader, secret) {
+  const [hashAlgo, signature] = signatureHeader.split("=");
+  const computedSignature = crypto
+    .createHmac(hashAlgo, secret)
+    .update(JSON.stringify(payload))
+    .digest("hex");
+
+  return crypto.timingSafeEqual(
+    Buffer.from(computedSignature, "utf8"),
+    Buffer.from(signature, "utf8")
+  );
+}
+
+// Function to build response object
+function buildResponseObject(data) {
+  const pullRequest = data_get(data, "pull_request");
+  const repository = data_get(data, "repository");
+  const sender = data_get(data, "sender");
+
+  return {
+    pull_request_id: pullRequest ? pullRequest.id : "N/A",
+    action: data_get(data, "action") || "Merged",
+    pull_request_url: pullRequest ? data_get(pullRequest, "html_url") : "N/A",
+    created_at: pullRequest ? pullRequest.created_at : new Date().toISOString(),
+    pull_request_title: pullRequest
+      ? data_get(pullRequest, "title")
+      : "No title",
+    pull_request_sender_username: pullRequest
+      ? data_get(pullRequest, "user.login")
+      : "N/A",
+    image: pullRequest
+      ? data_get(pullRequest, "user.avatar_url")
+      : data_get(sender, "avatar_url"),
+    pull_request_sender_url: pullRequest
+      ? data_get(pullRequest, "user.html_url")
+      : data_get(sender, "html_url"),
+    pull_request_comment: pullRequest
+      ? data_get(data, "comment.body") || data_get(pullRequest, "body") || ""
+      : "No pull request data",
+    repository_full_name: repository
+      ? data_get(repository, "full_name")
+      : "N/A",
+    repository_name: repository
+      ? data_get(repository, "name")
+      : "Unknown repository",
+    repository_url: repository ? data_get(repository, "html_url") : "N/A",
+    sender_username: sender ? data_get(sender, "login") : "Unknown sender",
+    sender_url: sender ? data_get(sender, "html_url") : "N/A",
+  };
+}
+
+function data_get(obj, path) {
+  return path.split(".").reduce((o, key) => (o || {})[key], obj);
+}
+
+app.use(
+  cors({
+    origin: "http://localhost:3000",
+    credentials: true,
+  })
+);
+
+// app.use(credentials);
+app.use("/", authRoutes);
+app.use("/", facebook);
+app.use(authenticateUser);
+app.use("/", pullrequest(webhookResponses));
+app.use("/", userRoutes);
+app.use("/", task);
+app.use("/", project);
+app.use("/", taskLog);
+app.use("/", stripe);
+app.use("/", comment);
+app.use("/", logout);
+const PORT = 5050;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
