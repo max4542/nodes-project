@@ -207,3 +207,55 @@ const PORT = 5050;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+/* eslint no-undef: "off" */
+/* eslint no-case-declarations: "off" */
+
+const express = require("express");
+const cors = require("cors");
+const app = express();
+const { logger } = require("./middleware/logEvents");
+const credentials = require("./middleware/credentials");
+const logout = require("./routes/logout");
+const authRoutes = require("./routes/auth");
+const session = require("express-session");
+const userRoutes = require("./routes/users");
+const pullrequest = require("./routes/pr");
+const task = require("./routes/task");
+const stripe = require("./routes/stripe");
+const project = require("./routes/project");
+const taskLog = require("./routes/taskLog");
+const authenticateUser = require("./middleware/authenticateUser");
+const { sendEmailWithReceipt } = require("./services/service");
+const { checkExpiredSubscriptions } = require("./services/cronJobs");
+const comment = require("./routes/comment");
+const bodyParser = require("body-parser");
+const Stripe = require("stripe");
+const crypto = require("crypto");
+const stripes = Stripe(process.env.STRIPE_SECRET_KEY);
+const cron = require("node-cron");
+const { upload } = require("../backend/db/db");
+const facebook = require("./routes/facebookAuth");
+
+app.use(
+  session({
+    secret: "Avdqead34@#43@#$",
+    resave: false,
+    saveUninitialized: true,
+    cookie: { maxAge: 30 * 60 * 1000 },
+  })
+);
+
+
+app.use(bodyParser.json({ limit: "10mb" }));
+app.use(bodyParser.urlencoded({ limit: "10mb", extended: true }));
+cron.schedule("*/5 * * * * *", async () => {
+  await checkExpiredSubscriptions();
+});
+
+app.post(
+  "/webhook",
+  bodyParser.raw({ type: "application/json" }),
+  async (req, res) => {
+    const sig = req.headers["stripe-signature"];
+    console.log(sig);
+    const endpointSecret = "whsec_rRybj9Ryr3Fm
